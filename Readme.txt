@@ -40,5 +40,9 @@ python ./client/pos.py (for 結帳線)
 #main function
 http://127.0.0.1:3000
 
-#send a camera image (base64)
-http://127.0.0.1:3000/
+[Display]
+![image](/pic/index.png)
+![image](/pic/trace1.png)
+![image](/pic/trace2.png)
+![image](/pic/order.png)
+![image](/pic/prods.png)
