@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="http://code.jquery.com/jquery-1.11.1.js"></script>    
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+<style>
+    body {
+        text-align: center;
+    }
+    h1 {
+        text-align: center;
+        color: blue;
+        font-size: 48px;
+    }
+    .button-container {
+        margin-top: 50px;
+    }
+    .button-container button {
+        font-size: 24px;
+        padding: 10px 20px;
+        margin: 10px;
+    }
+	#log {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        text-align: right;
+    }
+</style>
+</head>
+<body>
+<h1>秒結系統</h1>
+
+<div class="button-container">
+    <button onclick="location.href='/video'" style="width:200px">定點結帳</button>
+	<br>
+	<br>
+    <button onclick="location.href='/video2'" style="width:200px">流動線結帳</button>
+    <br>
+	<br>
+    <button onclick="location.href='/item'" style="width:200px">訂單明細查詢</button>
+    <br>
+	<br>
+    <button onclick="location.href='/prods'" style="width:200px">產品查詢</button>
+</div>
+
+<div id='log'></div>
+
+	<script>
+	
+	  if ('WebSocket' in window){
+         console.log('WebSocket is supported');
+     }
+
+	var socket = io();
+	socket.on('connect', function() {
+		socket.emit('connect_event', {data: 'yes, I connect successfully'});
+	})
+	
+	socket.on('server_response', function(msg) {
+		$('#log').append('<br>' + $('<div/>').text('Received #' + ': ' + msg.data).html());
+	 });
+	
+	//$('form#emit').submit(function(event) {
+	//	socket.emit('client_event', {data: $('#emit_data').val()});
+	//  return false;})
+
+  </script>
+</body>
+</html>

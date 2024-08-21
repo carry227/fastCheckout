@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Table with Bootstrap</title>
+    <!-- 引入 Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 自定义 CSS 
+    <link rel="stylesheet" type="text/css" href="styles.css">-->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            padding-top: 80px;
+        }
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: black;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 40px;
+            z-index: 1000;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 3em;
+        }
+        .header button {
+            font-size: 18px;
+            padding: 10px 20px;
+        }
+        .content {
+            margin-top: 60px;
+        }
+        .video-container, .image-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-container > video, .image-container > img {
+            max-width: 100%;
+            height: auto;
+        }
+        .button-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <script src="http://code.jquery.com/jquery-1.11.1.js"></script>
+</head>
+<body>
+    <div class="header">
+        <button onclick="location.href='/'">回到首頁</button>
+        <h1>秒結系統</h1>
+        <button onclick="location.href='/item'">訂單查詢</button>
+    </div>
+    <div class="content">
+        <div class="container mt-5">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="video-container">
+                        <video id="video" class="w-100" height="480"></video>
+                    <!--<canvas id="canvas" hidden width="640" height="480"></canvas>-->  
+                    </div>
+                    <canvas id="canvas" hidden width="640" height="480"></canvas>
+                </div>
+                <div class="col-md-6">
+                    <img id="detect_image" class="img-fluid mt-2" height="480">
+                </div>
+            </div>
+            <br/>
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="button-row mb-3">
+                        <button id="snap" class="btn btn-primary mt-2">商品辨識</button>
+                        <button id="checkout" style="scale: 1.5;" class="btn btn-success mb-3">結帳</button>
+                    </div>  
+                    <div class="button-row mb-3">
+                        <h2 class="mb-4">購買明細  </h2> <h1 style="color: red;"><span id="amount">0</span> 元</h1>
+                    </div>
+                    
+                    <div id="container">
+                        <table id="item-table" class="table table-bordered table-hover">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th>商品編號</th>
+                                    <th>商品名稱</th>
+                                    <th>數量</th>
+                                    <th>價格</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Items will be dynamically added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="order-status" class="alert alert-success" role="alert" style="display: none;">
+                        訂單已成功存檔！
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get access to the camera!
+        if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Not adding `{ audio: true }` since we only want video now
+           navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+           // navigator.mediaDevices.getUserMedia({ video: { deviceId: 1} }).then(function(stream) {
+                video.srcObject = stream;
+                video.play();
+            });
+        }
+
+        // WebSocket client
+        if ('WebSocket' in window){
+            console.log('WebSocket is supported');
+        }
+        var socket = io();
+
+        // Elements for taking the snapshot
+        var canvas = document.getElementById('canvas');
+        var context = canvas.getContext('2d');
+        var video = document.getElementById('video');
+        var detect_image = document.getElementById("detect_image");
+
+        socket.on('object_detection_event', function(msg){    
+            console.log('got object_detection_event');
+            detect_image.src = 'data:image/png;base64,' + msg;
+        });
+
+        // Trigger photo take
+        document.getElementById("snap").addEventListener("click", function() {
+            context.drawImage(video, 0, 0, 640, 480);    
+            var data = canvas.toDataURL();    
+            // Remove prefix string "data:image/png;base64,"
+            var base64 = data.replace(/^data:image\/(png|jpg);base64,/, "");
+            socket.emit('capture_event', base64);
+        });
+
+        // WebSocket events
+        socket.on('connect', function() {
+            console.log('I connect successfully');
+        });
+
+        socket.on('new_item_event', function(msg){    
+            console.log('got new_item_event');
+            var itemlist = JSON.parse(msg['data']);
+            console.log(itemlist);
+            add_item(itemlist);
+        });
+
+        socket.on('detected_objects', function(msg){    
+            console.log('got detected_objects');
+            var itemlist = JSON.parse(msg['objs']);
+            console.log(itemlist);
+            add_item(itemlist);
+        });
+
+        // JQuery events
+
+        update_amount();
+
+        // 刪除按鈕
+        $(document).on('click', ".delete-me", function(e){
+            var entry = $(this).closest('tr'); 
+            entry.remove();  // Remove entry from tr (table row)
+            update_amount();
+        });
+
+        $("#add").on('click', function(e){
+            socket.emit('new_item_event', '');
+            update_amount();
+        });
+
+        $("#getall").on('click', function(e){
+            socket.emit('get_allitem_event', '');
+        });
+
+        // Increase quantity
+        $(document).on('click', ".add-me", function() {
+            var qtyInput = $(this).closest('tr').find('.item-quantity');
+            qtyInput.val(parseInt(qtyInput.val()) + 1);
+            update_amount();
+        });
+
+        // Decrease quantity
+        $(document).on('click', ".decrease-qty", function() {
+            var qtyInput = $(this).closest('tr').find('.item-quantity');
+            var currentQty = parseInt(qtyInput.val());
+            if (currentQty > 1) {
+                qtyInput.val(currentQty - 1);
+            } else if (currentQty == 1) {
+                var entry = $(this).closest('tr');
+                entry.remove();  // Remove entry from tr (table row)
+            }
+            update_amount();
+        });
+
+        // Checkout
+        $("#checkout").on('click', function() {
+            var items = [];
+            $('#item-table tbody tr').each(function() {
+                var productId = $(this).find("td:eq(0) a").text().trim();  // 產品ID
+                var name = $(this).find("td:eq(1)").text().trim();  // 商品名稱
+                var quantity = parseInt($(this).find('.item-quantity').val().trim(), 10);  // 数量
+                var price = parseFloat($(this).find("td:eq(3)").text().trim());  // 價格
+                
+                // 確認所有數據都正確捕獲
+                console.log("Product ID: ", productId);
+                console.log("Name: ", name);
+                console.log("Quantity: ", quantity);
+                console.log("Price: ", price);
+                
+                items.push({
+                    productId: productId,  // 包含產品ID
+                    name: name,
+                    quantity: quantity,
+                    price: price
+                });
+            });
+            console.log(items);  // 控制台打印，以便調試
+            socket.emit('checkout_event', {items: items});
+        });
+        socket.on('order_saved', function(msg) {
+                console.log('接收到order_saved事件');
+                console.log(msg.status);
+                var orderStatus = document.getElementById('order-status');
+                orderStatus.textContent = msg.status; // 設置 <div> 元素的內容
+                orderStatus.style.display = 'block'; // 顯示訊息
+            });
+
+
+        // 新增商品到表格的函數
+        function add_item(itemlist) {
+            for (var i in itemlist) {
+                var item = itemlist[i];
+                var row = `<tr>
+                    <td><a href='#'>${item['p_id']}</a></td>
+                    <td>${item['p_name']}</td>
+                    <td><input type='text' class='item-quantity form-control' value='1' min='1' style='width: 80px;'></td>
+                    <td>${item['p_price']}</td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary add-me">+</button>
+                            <button type="button" class="btn btn-outline-secondary decrease-qty">-</button>
+                            <button type="button" class="btn btn-outline-danger delete-me">Del</button>
+                        </div>
+                    </td>
+                </tr>`;
+                $("#item-table tbody").append(row);
+            }
+            update_amount();
+        }
+
+        // 更新總金額
+        function update_amount() {
+            var total = 0;
+            $('#item-table tbody tr').each(function() {
+                var price = parseFloat($(this).find("td:eq(3)").text());  // 選擇第三列，價格
+                var quantity = parseInt($(this).find('.item-quantity').val());  // 获取数量输入
+                if (!isNaN(price) && !isNaN(quantity)) {
+                    total += price * quantity;
+                }
+            });
+            $("#amount").text(total);  // 更正顯示总金额
+        }
+
+    </script>
+</body>
+</html>

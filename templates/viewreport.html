@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>訂單明細查詢</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+        .top-buttons {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: black;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 40px;
+            z-index: 1000;
+        }
+        .top-buttons h1 {
+            margin: 0;
+            font-size: 3em;
+            text-align: center;
+            flex-grow: 1;
+        }
+        .top-buttons button {
+            font-size: 18px;
+            padding: 10px 20px;
+        }
+        .container {
+            margin-top: 80px;
+        }
+        .highlight {
+            background-color: lightblue;
+        }
+        .order-details {
+            display: none;
+        }
+        .btn-right {
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-buttons">
+        <button onclick="location.href='/'">回到首頁</button>
+        <h1>訂單明細查詢</h1>
+        <button onclick="location.href='/video'">結帳</button>
+    </div>
+    <br/>
+    <br/>
+    <div class="container mt-5">
+        <form id="searchForm" class="form-inline mb-4">
+            <div class="form-group mr-2">
+                <label for="start_date">日期區間起:</label>
+                <input type="date" name="start_date" id="start_date" class="form-control ml-2">
+            </div>
+            <div class="form-group mr-2">
+                <label for="end_date">迄:</label>
+                <input type="date" name="end_date" id="end_date" class="form-control ml-2">
+            </div>
+            <button type="button" class="btn btn-primary" id="searchBtn">查詢</button>
+            <button type="button" class="btn btn-success btn-right" id="downloadButton" style="display:none;">下載 Excel</button>
+        </form>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div id="results"></div>
+            </div>
+            <div class="col-md-6">
+                <div id="orderDetails" class="order-details"></div>
+                <button id="backButton" type="button" class="btn btn-secondary mt-3" style="display:none;">回上頁</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var socket = io.connect();
+            
+            // Calculate the date range
+            var end_date = new Date();
+            var start_date = new Date();
+            start_date.setDate(start_date.getDate() - 30);
+            
+            // Format dates as YYYY-MM-DD
+            function formatDate(date) {
+                var d = new Date(date),
+                    month = '' + (d.getMonth() + 1),
+                    day = '' + d.getDate(),
+                    year = d.getFullYear();
+            
+                if (month.length < 2) month = '0' + month;
+                if (day.length < 2) day = '0' + day;
+            
+                return [year, month, day].join('-');
+            }
+            
+            document.getElementById('start_date').value = formatDate(start_date);
+            document.getElementById('end_date').value = formatDate(end_date);
+    
+            // Emit the search event with the default date range
+            socket.emit('search', { start_date: formatDate(start_date).replace(/-/g, ''), end_date: formatDate(end_date).replace(/-/g, '') });
+            
+            document.getElementById('searchBtn').addEventListener('click', function() {
+                var start_date = document.getElementById('start_date').value;
+                var end_date = document.getElementById('end_date').value;
+                console.log('Start date: ', start_date);  // Debug line
+                console.log('End date: ', end_date);  // Debug line
+                socket.emit('search', { start_date: start_date.replace(/-/g, ''), end_date: end_date.replace(/-/g, '') });
+            });
+        
+            socket.on('search_results', function(data) {
+                console.log('Search results:', data);  // Debug line
+                var resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '';
+                if (!Array.isArray(data.results)) {
+                    console.error('Expected results to be an array:', data.results);
+                    return;
+                }
+                var table = document.createElement('table');
+                table.className = 'table table-bordered';
+                var thead = document.createElement('thead');
+                var headerRow = document.createElement('tr');
+                headerRow.innerHTML = '<th>訂單編號</th><th>訂單日期</th><th>金額</th>';
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                var tbody = document.createElement('tbody');
+                var orders = data.results;
+                orders.forEach(order => {
+                    var row = document.createElement('tr');
+                    row.innerHTML = `<td><a href="#" class="order-link" data-id="${order['訂單編號']}">${order['訂單編號']}</a></td><td>${order['訂單日期']}</td><td>${order['金額']}</td>`;
+                    tbody.appendChild(row);
+                });
+                table.appendChild(tbody);
+                resultsDiv.appendChild(table);
+                document.getElementById('downloadButton').style.display = 'block';
+        
+                document.querySelectorAll('.order-link').forEach(function(link) {
+                    link.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        showDetails(this.getAttribute('data-id'));
+                    });
+                });
+            });
+        
+            function showDetails(orderId) {
+                socket.emit('get_order_details', { o_id: orderId });
+            }
+        
+            socket.on('order_details', function(data) {
+                var detailsDiv = document.getElementById('orderDetails');
+                var resultsDiv = document.getElementById('results');
+                detailsDiv.innerHTML = `<h3>訂單明細資料</h3><p>訂單編號: ${data.order_id}</p><p>訂單日期: ${data.order_date}</p>` + data.details;
+                detailsDiv.style.display = 'block';
+        
+                // Highlight the selected order
+                document.querySelectorAll('#results tr').forEach(row => row.classList.remove('highlight'));
+                document.querySelector(`#results tr td a[data-id='${data.order_id}']`).parentElement.parentElement.classList.add('highlight');
+            });
+        
+            document.getElementById('downloadButton').addEventListener('click', function() {
+                window.location.href = '/download';
+            });
+        
+            socket.on('download', function(data) {
+                if (data.file.endsWith('.xlsx')) {
+                    var link = document.createElement('a');
+                    link.href = data.file;
+                    link.download = data.file.split('/').pop();
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else {
+                    alert(data.file);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
