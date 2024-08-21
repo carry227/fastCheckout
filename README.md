@@ -9,12 +9,12 @@ http://127.0.0.1:3000
 
 ##[Display]
 ###首頁
-![image](/pic/index.png)
+![image](/img/index.png)
 ###定點結帳
-![image](/pic/trace1.png)
+![image](/img/trace1.png)
 ###流動線結帳
-![image](/pic/trace2.png)
+![image](/img/trace2.png)
 ###訂單
-![image](/pic/order.png)
+![image](/img/order.png)
 ###商品
-![image](/pic/prods.png)
+![image](/img/prods.png)
